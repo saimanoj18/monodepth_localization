@@ -40,7 +40,7 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
         EST_pose = GT_pose;   
         d_var = 0.01;
         d_limit = 0.0;
-        matching_thres = K(0,0)*base_line*( 1.0/(d_limit/16.0) + d_var/((float)(d_limit/16.0)*(d_limit/16.0)*(d_limit/16.0)) );
+        matching_thres = 0.0;//K(0,0)*base_line*( 1.0/(d_limit/16.0) + d_var/((float)(d_limit/16.0)*(d_limit/16.0)*(d_limit/16.0)) );
     }
 
     if (mode ==1)
@@ -53,7 +53,7 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
 
         d_var = 0.01;
         d_limit = 0.0;
-        matching_thres = K(0,0)*base_line*( 1.0/(d_limit/16.0) + d_var/((float)(d_limit/16.0)*(d_limit/16.0)*(d_limit/16.0)) );
+        matching_thres = 0.0;//K(0,0)*base_line*( 1.0/(d_limit/16.0) + d_var/((float)(d_limit/16.0)*(d_limit/16.0)*(d_limit/16.0)) );
 
         //load velo_global from .las
         std:string filename;
@@ -108,7 +108,7 @@ void CamLocalization::Refresh()
     if(mode ==1) Velo_received = true;
 
 
-    if(Velo_received && Left_received && Right_received)
+    if(Velo_received && Left_received && Right_received && Depth_received)
     {
           
         int u, v;//for loops
@@ -146,13 +146,6 @@ void CamLocalization::Refresh()
         cv::normalize(left_image, left_scaled, 0, 1, CV_MINMAX, CV_32FC1);   
         cv::Scharr(left_scaled, igx_image, CV_32FC1, 1, 0);
         cv::Scharr(left_scaled, igy_image, CV_32FC1, 0, 1);   
-
-        /////////////////////////disparity map generation/////////////////////////////        
-        disp = cv::Mat::zeros(cv::Size(width, height), CV_16S);
-        cv::Ptr<cv::StereoSGBM> sbm;
-        if(mode == 0)sbm = cv::StereoSGBM::create(0,16*5,7);
-        if(mode == 1)sbm = cv::StereoSGBM::create(0,16*2,7);
-        sbm->compute(left_image, right_image, disp);
         frameID = frameID+1;
 
         /////////////////////////depth image generation/////////////////////////////
@@ -167,9 +160,9 @@ void CamLocalization::Refresh()
             u = i%width;
             v = i/width;
             
-            int16_t d = disp.at<int16_t>(v,u);            
+            int16_t d = disp.at<int8_t>(v,u);            
             if(d==0 || d!=d || d<d_limit) d = 0; //
-            depth[i] = K(0,0)*base_line*( 1.0/((float)d/16.0) + d_var/((float)(d/16.0)*(d/16.0)*(d/16.0)) );
+            depth[i] = 2*K(0,0)*base_line*( 1.0/((float)d) + d_var/((float)(d)*(d)*(d)) );
 
             //depth image            
             ref_depth.at<float>(v,u) = depth[i];
@@ -193,14 +186,6 @@ void CamLocalization::Refresh()
 
         }
 
-//        std::string depth_file;
-//        depth_file =  "./depth/"+std::to_string(frameID-1)+".jpg";
-//        save_colormap(depth_image, depth_file,0,30);
-
-//        cv::imshow("depth_image", depth_image);
-//        cv::waitKey(3);
-//        cv::moveWindow("depth_image", 50,20);
-
 
 
         if(mode == 1){
@@ -214,9 +199,6 @@ void CamLocalization::Refresh()
 
 
             /////////////////////////depth gradient generation/////////////////////////////
-            //depth propagation
-//            depth_propagation(depth,cur_depth_info,update_pose);
-            //depth gradient
             cv::Scharr(ref_depth, dgx_image, CV_32FC1, 1, 0);
             cv::Scharr(ref_depth, dgy_image, CV_32FC1, 0, 1);
             int count_gradient = 0; 
@@ -325,6 +307,7 @@ void CamLocalization::Refresh()
         if(mode == 0)Velo_received = false;
         Left_received = false;
         Right_received = false;
+        Depth_received = false;
 
 //        delete [] depth;
 //        delete [] depth_gradientX;
@@ -455,6 +438,20 @@ void CamLocalization::RightImgCallback(const sensor_msgs::ImageConstPtr& msg, co
         P1 = Map<const MatrixXd>(&infomsg->P[0], 3, 4);   
     }
 }
+
+void CamLocalization::DepthImgCallback(const sensor_msgs::Image::ConstPtr& msg)
+{
+    if(Depth_received==false)
+    {
+        //image processing
+        cv_bridge::CvImagePtr cv_ptr;
+        cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::MONO8);
+        disp = cv_ptr->image;       
+        cv::resize(disp, disp, cv::Size(), scale, scale);
+        Depth_received = true; 
+          
+    }
+}   
 
 void CamLocalization::depth_propagation(float* idepth, cv::Mat info, Matrix4d pose)
 {

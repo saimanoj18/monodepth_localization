@@ -64,14 +64,15 @@ public:
     fakeTimeStamp(0),frameID(0),
     mode(0),scale(0.42553191),//scale(0.7),
 //    mode(1),scale(0.382),//0.472
-    Velo_received(false),Left_received(false),Right_received(false), octree(128.0f)
+    Velo_received(false),Left_received(false),Right_received(false), Depth_received(false),octree(128.0f)
     {
         it = new image_transport::ImageTransport(nh);
         
         //Set Subscriber
         sub_veloptcloud = nh.subscribe("/kitti/velodyne_points", 1, &CamLocalization::VeloPtsCallback, this);
         sub_leftimg = it->subscribeCamera("/kitti/left_image", 10,&CamLocalization::LeftImgCallback, this);
-        sub_rightimg = it->subscribeCamera("/kitti/right_image", 10,&CamLocalization::RightImgCallback, this);         
+        sub_rightimg = it->subscribeCamera("/kitti/right_image", 10,&CamLocalization::RightImgCallback, this);
+        sub_monodepth = nh.subscribe("/monodepth/image", 1, &CamLocalization::DepthImgCallback, this);         
         
 //        sub_leftimg = nh.subscribe("/kitti/left_image", 1, &CamLocalization::LeftImgCallback, this);
 //        sub_rightimg = nh.subscribe("/kitti/right_image", 1, &CamLocalization::RightImgCallback, this);
@@ -118,6 +119,7 @@ private:
     ros::Subscriber sub_veloptcloud;
     image_transport::CameraSubscriber sub_leftimg;
     image_transport::CameraSubscriber sub_rightimg;
+    ros::Subscriber sub_monodepth;
 //    ros::Subscriber sub_caminfo;
     tf::TransformListener tlistener;
 
@@ -193,10 +195,12 @@ private:
 //    void RightImgCallback(const sensor_msgs::Image::ConstPtr& msg);
     void LeftImgCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr & infomsg);
     void RightImgCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr & infomsg);
+    void DepthImgCallback(const sensor_msgs::Image::ConstPtr& msg);
     void CamInfoCallback(const sensor_msgs::CameraInfo::ConstPtr& msg);
     bool Velo_received; 
     bool Left_received; 
     bool Right_received;
+    bool Depth_received;
     int8_t mode;
     void read_poses(std::string fname); 
     void write_poses(std::string fname, Matrix4d saved_pose); 
