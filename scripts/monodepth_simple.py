@@ -60,7 +60,7 @@ class monodepth:
         '''Initialize ros publisher, ros subscriber'''
         self.image_pub = rospy.Publisher("/monodepth/image",Image)
         self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("/kitti/left_image",Image,self.callback)
+        self.image_sub = rospy.Subscriber("/kitti/left_color_image",Image,self.callback)
 
         '''Initialize network for the depth estimation'''
         params = monodepth_parameters(
@@ -116,6 +116,7 @@ class monodepth:
 
         disp = self.sess.run(self.model.disp_left_est[0], feed_dict={self.left: input_images})
         disp_pp = post_process_disparity(disp.squeeze()).astype(np.float32)
+#        disp_pp = disp[0,:,:].astype(np.float32)
 
         disp_to_img = scipy.misc.imresize(disp_pp.squeeze(), [original_height, original_width])
         cv2.imshow("disp_to_img", disp_to_img)

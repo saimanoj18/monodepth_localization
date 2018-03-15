@@ -40,7 +40,7 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
         EST_pose = GT_pose;   
         d_var = 0.01;
         d_limit = 0.0;
-        matching_thres = 0.0;//K(0,0)*base_line*( 1.0/(d_limit/16.0) + d_var/((float)(d_limit/16.0)*(d_limit/16.0)*(d_limit/16.0)) );
+        matching_thres = K(0,0)*base_line*( 1.0/(d_limit/16.0) + d_var/((float)(d_limit/16.0)*(d_limit/16.0)*(d_limit/16.0)) );
     }
 
     if (mode ==1)
@@ -53,7 +53,7 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
 
         d_var = 0.01;
         d_limit = 0.0;
-        matching_thres = 0.0;//K(0,0)*base_line*( 1.0/(d_limit/16.0) + d_var/((float)(d_limit/16.0)*(d_limit/16.0)*(d_limit/16.0)) );
+        matching_thres = K(0,0)*base_line*( 1.0/(d_limit/16.0) + d_var/((float)(d_limit/16.0)*(d_limit/16.0)*(d_limit/16.0)) );
 
         //load velo_global from .las
         std:string filename;
@@ -160,9 +160,9 @@ void CamLocalization::Refresh()
             u = i%width;
             v = i/width;
             
-            int16_t d = disp.at<int8_t>(v,u);            
+            int8_t d = disp.at<int8_t>(v,u);            
             if(d==0 || d!=d || d<d_limit) d = 0; //
-            depth[i] = 2*K(0,0)*base_line*( 1.0/((float)d) + d_var/((float)(d)*(d)*(d)) );
+            depth[i] = width/height*K(0,0)*base_line*( 1.0/((float)d) );//+ d_var/((float)(d)*(d)*(d)) 
 
             //depth image            
             ref_depth.at<float>(v,u) = depth[i];
@@ -186,7 +186,9 @@ void CamLocalization::Refresh()
 
         }
 
-
+//        cv::imshow("depth_image", ref_depth);
+//        cv::waitKey(3);
+//        cv::moveWindow("depth_image", 50,20); 
 
         if(mode == 1){
             GT_pose = IN_pose.inverse()*GT_pose*cTv.inverse();
@@ -448,7 +450,7 @@ void CamLocalization::DepthImgCallback(const sensor_msgs::Image::ConstPtr& msg)
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::MONO8);
         disp = cv_ptr->image;       
         cv::resize(disp, disp, cv::Size(), scale, scale);
-        Depth_received = true; 
+        Depth_received = true;
           
     }
 }   
