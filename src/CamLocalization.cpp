@@ -18,14 +18,6 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
     width = 512;
     height = 256;
     
-    //Set ref images
-    ref_container = new float[width*height];
-    igx_container = new float[width*height];
-    igy_container = new float[width*height];
-
-    //Set ref depth
-    ref_depth = cv::Mat::zeros(cv::Size(width, height), CV_32FC1);
-    ref_depth_info = cv::Mat::zeros(cv::Size(width, height), CV_32FC1);
 
     //Set informations
     depth = new float[width*height]();
@@ -98,16 +90,12 @@ void CamLocalization::Refresh()
             {
                 u = i%width;
                 v = i/width;
-                int8_t d = disp.at<int8_t>(v,u); 
-                if(d==0 || d!=d || d<d_limit) d = 0; //
-                depth[i] = width/height*K(0,0)*base_line*( 1.0/((float)d) );//+ d_var/((float)(d)*(d)*(d)) 
-                //depth image            
-                ref_depth.at<float>(v,u) = depth[i];
+                depth[i] = disp.at<float>(v,u);        
             }
 
             /////////////////////////depth gradient generation/////////////////////////////
-            cv::Scharr(ref_depth, dgx_image, CV_32FC1, 1, 0);
-            cv::Scharr(ref_depth, dgy_image, CV_32FC1, 0, 1);
+            cv::Scharr(disp, dgx_image, CV_32FC1, 1, 0);
+            cv::Scharr(disp, dgy_image, CV_32FC1, 0, 1);
             int count_gradient = 0; 
             for(size_t i=0; i<width*height;i++)
             {
@@ -305,9 +293,9 @@ void CamLocalization::DepthImgCallback(const sensor_msgs::Image::ConstPtr& msg)
     {
         //image processing
         cv_bridge::CvImagePtr cv_ptr;
-        cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::MONO8);
+        cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
         disp = cv_ptr->image;       
-        cv::resize(disp, disp, cv::Size(), scale, scale);
+//        cv::resize(disp, disp, cv::Size(), scale, scale);
         Depth_received = true;
           
     }

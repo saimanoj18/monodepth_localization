@@ -87,9 +87,6 @@ public:
 
     }
     ~CamLocalization(){
-        delete [] ref_container;
-        delete [] igx_container;
-        delete [] igy_container;
     
     }
     void CamLocInitialize(cv::Mat image);
@@ -125,23 +122,11 @@ private:
     pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree;
     cv::Mat left_image;
     cv::Mat right_image;
-    cv::Mat ref_image;
-    cv::Mat ref_igx;
-    cv::Mat ref_igy;
-    cv::Mat ref_depth;
-    cv::Mat ref_depth_info;
-    float* ref_container;
-    float* igx_container;
-    float* igy_container;
     double fakeTimeStamp;
     int frameID;
-    cv::Mat igx_image, igy_image;
-    cv::Mat left_scaled;
     cv::Mat dgx_image, dgy_image; 
     cv::Mat disp;
-    cv::Mat cur_depth_info;
-    float* depth;// = new float[width*height]();
-    float* image_info;// = new float[width*height]();
+    float* depth;
     float* depth_gradientX;// = new float[width*height]();
     float* depth_gradientY;// = new float[width*height]();
     float* depth_info;// = new float[width*height]();
@@ -178,8 +163,6 @@ private:
 
     //Callbacks
     void VeloPtsCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
-//    void LeftImgCallback(const sensor_msgs::Image::ConstPtr& msg);
-//    void RightImgCallback(const sensor_msgs::Image::ConstPtr& msg);
     void LeftImgCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr & infomsg);
     void RightImgCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr & infomsg);
     void DepthImgCallback(const sensor_msgs::Image::ConstPtr& msg);
