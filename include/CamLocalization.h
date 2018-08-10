@@ -61,9 +61,7 @@ class CamLocalization
 public:
     CamLocalization():
     velo_raw(new pcl::PointCloud<pcl::PointXYZ>),velo_cloud(new pcl::PointCloud<pcl::PointXYZ>),velo_xyzi(new pcl::PointCloud<pcl::PointXYZI>),velo_global(new pcl::PointCloud<pcl::PointXYZ>),
-    fakeTimeStamp(0),frameID(0),
-    mode(0),scale(1),//0.42553191scale(0.7),
-//    mode(1),scale(0.382),//0.472
+    fakeTimeStamp(0),frameID(0), scale(1),
     Velo_received(false),Left_received(false),Right_received(false), Depth_received(false),octree(128.0f)
     {
         it = new image_transport::ImageTransport(nh);
@@ -73,33 +71,21 @@ public:
         sub_leftimg = it->subscribeCamera("/kitti/left_image", 10,&CamLocalization::LeftImgCallback, this);
         sub_rightimg = it->subscribeCamera("/kitti/right_image", 10,&CamLocalization::RightImgCallback, this);
         sub_monodepth = nh.subscribe("/monodepth/image", 1, &CamLocalization::DepthImgCallback, this);         
-        
-//        sub_leftimg = nh.subscribe("/kitti/left_image", 1, &CamLocalization::LeftImgCallback, this);
-//        sub_rightimg = nh.subscribe("/kitti/right_image", 1, &CamLocalization::RightImgCallback, this);
-//        sub_caminfo = nh.subscribe("/kitti/camera_gray_left/camera_info", 1, &CamLocalization::CamInfoCallback, this);
-
 
         EST_pose = Matrix4d::Identity();
         IN_pose = Matrix4d::Identity();
         update_pose = Matrix4d::Identity();
-        if(mode ==0 )update_pose(2,3) = 0.8;
-        else update_pose(2,3) = 0.3;
+        update_pose(2,3) = 0.8;
+
         optimized_T = Matrix4d::Identity();
         GT_pose = Matrix4d::Identity();
+        VO_pose = Matrix4d::Identity();
 
-        base_line = 0.482;
+        base_line = 0.54;
 
-//        data_path_ = "/media/youngji/storagedevice/naver_data/20180125_kitti";
-        data_path_ = "/home/irap/data/20180125_kitti";
-//        data_path_ = "/home/irap/data/20171120_kitti";
-
-//        read_poses("poses.txt");
-//        cout<<"Pose loading is completed"<<endl;
-//        cout.precision(20);
 
     }
     ~CamLocalization(){
-        //references.clear();
         delete [] ref_container;
         delete [] igx_container;
         delete [] igy_container;
@@ -148,7 +134,6 @@ private:
     float* igy_container;
     double fakeTimeStamp;
     int frameID;
-    std::string data_path_;
     cv::Mat igx_image, igy_image;
     cv::Mat left_scaled;
     cv::Mat dgx_image, dgy_image; 
@@ -184,6 +169,7 @@ private:
     Matrix4d IN_pose;
     Matrix4d EST_pose;
     Matrix4d GT_pose;
+    Matrix4d VO_pose;
     Matrix4d update_pose;
     Matrix4d optimized_T;
     vector<Matrix4d, Eigen::aligned_allocator<Eigen::Vector4f>> GT_poses;
@@ -201,14 +187,12 @@ private:
     bool Left_received; 
     bool Right_received;
     bool Depth_received;
-    int8_t mode;
     void read_poses(std::string fname); 
     void write_poses(std::string fname, Matrix4d saved_pose); 
 
     //main algorithms
     Matrix4d visual_tracking(const float* ref, const float* r_igx, const float* r_igy, const float* i_var, const float* idepth, cv::Mat cur,Matrix4d init_pose, float thres);
-    Matrix4d Optimization(const float* idepth, const float* idepth_var, const float* d_gradientX, const float* d_gradientY, float thres); 
-    void depth_propagation(float* idepth, cv::Mat info, Matrix4d pose);    
+    Matrix4d Optimization(const float* idepth, const float* idepth_var, const float* d_gradientX, const float* d_gradientY, float thres);   
 
     void debugImage(cv::Mat& depth_image,cv::Mat& dgx_image,cv::Mat& dgy_image,const float* depth_info);
 
@@ -308,7 +292,6 @@ private:
             for(size_t v=0; v<height;v++)
             {
                 ColorsMap.at<cv::Vec3b>(v,u)= cv::Vec3b((int)adjMap1.at<float>(v,u),(int)adjMap2.at<float>(v,u),255);
-                //if(adjMap1.at<float>(v,u)>127)cout<<adjMap1.at<float>(v,u)<<", "<<adjMap2.at<float>(v,u)<<endl;
             }
         }
         cv::Mat ColorsMap_RGB;

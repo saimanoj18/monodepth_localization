@@ -1,0 +1,10 @@
+<launch>
+  <!-- Node -->
+  <node pkg="monodepth_localization" type="monodepth_localization" name="monodepth_localization" output="screen">
+  </node>
+
+  <!-- Node -->
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find monodepth_localization)/config/rviz.rviz" output="log">
+  </node>
+
+</launch>
