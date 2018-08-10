@@ -62,7 +62,8 @@ public:
     CamLocalization():
     velo_raw(new pcl::PointCloud<pcl::PointXYZ>),velo_cloud(new pcl::PointCloud<pcl::PointXYZ>),velo_xyzi(new pcl::PointCloud<pcl::PointXYZI>),velo_global(new pcl::PointCloud<pcl::PointXYZ>),
     fakeTimeStamp(0),frameID(0), scale(1),
-    Velo_received(false),Left_received(false),Right_received(false), Depth_received(false),octree(128.0f)
+    Velo_received(false),Left_received(false),Right_received(false), Depth_received(false),VO_received(false),
+    octree(128.0f)
     {
         it = new image_transport::ImageTransport(nh);
         
@@ -70,7 +71,7 @@ public:
         sub_veloptcloud = nh.subscribe("/kitti/velodyne_points", 1, &CamLocalization::VeloPtsCallback, this);
         sub_leftimg = it->subscribeCamera("/kitti/left_image", 10,&CamLocalization::LeftImgCallback, this);
         sub_rightimg = it->subscribeCamera("/kitti/right_image", 10,&CamLocalization::RightImgCallback, this);
-        sub_monodepth = nh.subscribe("/monodepth/image", 1, &CamLocalization::DepthImgCallback, this);         
+        sub_monodepth = nh.subscribe("/undeepvo/image", 1, &CamLocalization::DepthImgCallback, this);         
 
         EST_pose = Matrix4d::Identity();
         IN_pose = Matrix4d::Identity();
@@ -187,6 +188,7 @@ private:
     bool Left_received; 
     bool Right_received;
     bool Depth_received;
+    bool VO_received;
     void read_poses(std::string fname); 
     void write_poses(std::string fname, Matrix4d saved_pose); 
 

@@ -3,10 +3,10 @@
 void CamLocalization::CamLocInitialize(cv::Mat image)
 {
     //Set matrices
-    float fx = P0(0,0)*image.cols/ancient_width;
-    float fy = P0(1,1)*image.cols/ancient_width;        
-    float cx = P0(0,2)*image.cols/ancient_width;
-    float cy = P0(1,2)*image.cols/ancient_width;
+    float fx = P0(0,0)*512/ancient_width;
+    float fy = P0(1,1)*512/ancient_width;        
+    float cx = P0(0,2)*512/ancient_width;
+    float cy = P0(1,2)*512/ancient_width;
     base_line = -P1(0,3)/P0(0,0);// because R = I;
 
     cout<<"width: "<<ancient_width<<endl;
@@ -14,9 +14,9 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
     K << fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0;
     cout<<"K_mat: "<<K<<endl;
     cout<<"extrinsic Camera to Velodyne: "<<cTv<<endl;
-    cout<<left_image.cols<<", "<<left_image.rows<<endl;
-    width = left_image.cols;
-    height = left_image.rows;
+//    cout<<disp.cols<<", "<<disp.rows<<endl;
+    width = 512;
+    height = 256;
     
     //Set ref images
     ref_container = new float[width*height];
@@ -24,12 +24,11 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
     igy_container = new float[width*height];
 
     //Set ref depth
-    ref_depth = cv::Mat::zeros(cv::Size(left_image.cols, left_image.rows), CV_32FC1);
-    ref_depth_info = cv::Mat::zeros(cv::Size(left_image.cols, left_image.rows), CV_32FC1);
+    ref_depth = cv::Mat::zeros(cv::Size(width, height), CV_32FC1);
+    ref_depth_info = cv::Mat::zeros(cv::Size(width, height), CV_32FC1);
 
     //Set informations
     depth = new float[width*height]();
-    image_info= new float[width*height]();
     depth_gradientX = new float[width*height]();
     depth_gradientY = new float[width*height]();
     depth_info = new float[width*height]();
@@ -54,7 +53,9 @@ void CamLocalization::Refresh()
         cTv.matrix() = e_temp.matrix();       
     }
 
-    if(Velo_received && Left_received && Right_received) // && Depth_received)
+    if(frameID == 0) Depth_received = true;
+
+    if(Velo_received && Depth_received) // && && Left_received && Right_received )
     {
           
         int u, v;//for loops
@@ -70,130 +71,96 @@ void CamLocalization::Refresh()
             tf::transformTFToEigen(wtb, e_temp);
             GT_pose.matrix() = e_temp.matrix();  
         }
-        //prepare Learned VO
         success_pose = tlistener.waitForTransform("/undeepvo/World", "/undeepvo/Current", ros::Time(0), ros::Duration(0.1));
         if (success_pose) {
             tlistener.lookupTransform("/undeepvo/World", "/undeepvo/Current", ros::Time(0), wtb);
             Eigen::Affine3d e_temp;
             tf::transformTFToEigen(wtb, e_temp);
             update_pose.matrix() = e_temp.matrix();
-            VO_pose = VO_pose*update_pose;  
-        }        
+            VO_pose = VO_pose*update_pose;
+        }       
 
         //initialize 
-        if(frameID == 0)CamLocInitialize(right_image);            
-        
-        //prepare image gradients & depth gradients
-        cv::normalize(left_image, left_scaled, 0, 1, CV_MINMAX, CV_32FC1);   
-        cv::Scharr(left_scaled, igx_image, CV_32FC1, 1, 0);
-        cv::Scharr(left_scaled, igy_image, CV_32FC1, 0, 1);   
+        if(frameID == 0)CamLocInitialize(disp);            
+          
         frameID = frameID+1;
 
-        /////////////////////////depth image generation/////////////////////////////
-        cur_depth_info = cv::Mat::zeros(cv::Size(left_image.cols, left_image.rows), CV_32FC1);
         pcl::PointCloud<pcl::PointXYZ>::Ptr image_cloud (new pcl::PointCloud<pcl::PointXYZ>);
         image_cloud->width    = width;
         image_cloud->height   = height;
         image_cloud->is_dense = false;
         image_cloud->points.resize (image_cloud->width * image_cloud->height);
-//        for(size_t i=0; i<width*height;i++)
-//        {
-//            u = i%width;
-//            v = i/width;
-//            
-//            int8_t d = disp.at<int8_t>(v,u);            
-//            if(d==0 || d!=d || d<d_limit) d = 0; //
-//            depth[i] = width/height*K(0,0)*base_line*( 1.0/((float)d) );//+ d_var/((float)(d)*(d)*(d)) 
 
-//            //depth image            
-//            ref_depth.at<float>(v,u) = depth[i];
+        if(frameID>1){            
 
-//            //image gradient
-//            float igx = igx_image.at<float>(v,u)/32.0f;
-//            float igy = igy_image.at<float>(v,u)/32.0f;
-//            float info_nom = sqrt(igx*igx+igy*igy);
-//            if(!isfinite(info_nom))image_info[i] = 0;
-//            else image_info[i] = 1000.0f*sqrt(igx*igx+igy*igy);
+            /////////////////////////depth image generation/////////////////////////////
+            for(size_t i=0; i<width*height;i++)
+            {
+                u = i%width;
+                v = i/width;
+                int8_t d = disp.at<int8_t>(v,u); 
+                if(d==0 || d!=d || d<d_limit) d = 0; //
+                depth[i] = width/height*K(0,0)*base_line*( 1.0/((float)d) );//+ d_var/((float)(d)*(d)*(d)) 
+                //depth image            
+                ref_depth.at<float>(v,u) = depth[i];
+            }
 
-//            //depth info
-//            cur_depth_info.at<float>(v,u) = image_info[i];            
+            /////////////////////////depth gradient generation/////////////////////////////
+            cv::Scharr(ref_depth, dgx_image, CV_32FC1, 1, 0);
+            cv::Scharr(ref_depth, dgy_image, CV_32FC1, 0, 1);
+            int count_gradient = 0; 
+            for(size_t i=0; i<width*height;i++)
+            {
+                u = i%width;
+                v = i/width;
 
-//            //reference images
-//            if(frameID>1){
-//                ref_container[i] = ref_image.at<float>(v,u);
-//                igx_container[i] = ref_igx.at<float>(v,u)/32.0f;
-//                igy_container[i] = ref_igy.at<float>(v,u)/32.0f;
-//            } 
+                //depth gradient
+                depth_gradientX[i] = dgx_image.at<float>(v,u)/32.0f;
+                depth_gradientY[i] = dgy_image.at<float>(v,u)/32.0f;
 
-//        }
+                //depth info
+                float info_denom = sqrt(depth_gradientX[i]*depth_gradientX[i]+depth_gradientY[i]*depth_gradientY[i]);
+                if (!isfinite(info_denom)) depth_info[i] = 0;
+                else if (info_denom<0.01) depth_info[i] = 0;
+                else depth_info[i] = 10.0/info_denom;
 
-//        if(frameID>1){            
-//            
-//            //tracking
-//            update_pose = visual_tracking(ref_container,igx_container,igy_container,image_info,depth,left_scaled,update_pose,200.0);
-//            cout<<update_pose<<endl;
+                //cloud plot
+                if(isfinite(depth[i])){
+                    image_cloud->points[i].x = depth[i]/K(0,0)*(u-K(0,2));
+                    image_cloud->points[i].y = depth[i]/K(1,1)*(v-K(1,2)); 
+                    image_cloud->points[i].z = depth[i];
+                }   
+            }
 
-
-//            /////////////////////////depth gradient generation/////////////////////////////
-//            cv::Scharr(ref_depth, dgx_image, CV_32FC1, 1, 0);
-//            cv::Scharr(ref_depth, dgy_image, CV_32FC1, 0, 1);
-//            int count_gradient = 0; 
-//            for(size_t i=0; i<width*height;i++)
-//            {
-//                u = i%width;
-//                v = i/width;
-
-//                //depth gradient
-//                depth_gradientX[i] = dgx_image.at<float>(v,u)/32.0f;
-//                depth_gradientY[i] = dgy_image.at<float>(v,u)/32.0f;
-
-//                //depth info
-//                float info_denom = sqrt(depth_gradientX[i]*depth_gradientX[i]+depth_gradientY[i]*depth_gradientY[i]);
-//                if (!isfinite(info_denom)) depth_info[i] = 0;
-//                else if (info_denom<0.01) depth_info[i] = 0;
-//                else depth_info[i] = 10.0/info_denom;
-
-//                //cloud plot
-//                if(isfinite(depth[i])){
-//                    image_cloud->points[i].x = depth[i]/K(0,0)*(u-K(0,2));
-//                    image_cloud->points[i].y = depth[i]/K(1,1)*(v-K(1,2)); 
-//                    image_cloud->points[i].z = depth[i];
-//                }   
-//            }
-
-//            //prepare velo_raw
-//            EST_pose = EST_pose*update_pose;
-//            pcl::transformPointCloud (*velo_cloud, *velo_raw, GT_pose.matrix().cast <float> ());//transform to world coordinate
+            //prepare velo_raw
+            EST_pose = EST_pose*update_pose;
+            pcl::transformPointCloud (*velo_cloud, *velo_raw, GT_pose.matrix().cast <float> ());//transform to world coordinate
 
 
-//            //prepare velo_cloud
-//            pcl::transformPointCloud (*velo_raw, *velo_cloud, EST_pose.inverse().matrix().cast <float> ());
-//            
-//            //localization
-//            optimized_T = Matrix4d::Identity();
-//            optimized_T = Optimization(depth,depth_info,depth_gradientX,depth_gradientY,5.0);
-//            cout<<optimized_T<<endl;
+            //prepare velo_cloud
+            pcl::transformPointCloud (*velo_raw, *velo_cloud, EST_pose.inverse().matrix().cast <float> ());
+            
+            //localization
+            optimized_T = Matrix4d::Identity();
+            optimized_T = Optimization(depth,depth_info,depth_gradientX,depth_gradientY,5.0);
+            cout<<optimized_T<<endl;
 //            EST_pose = EST_pose*optimized_T.inverse();
 
-//        }
+        }
         
         //publish map and pose
         MapPub.PublishMap(velo_raw,1);//publish velo raw
         MapPub.PublishPose(GT_pose,1);//publish GT pose
         MapPub.PublishPose(VO_pose,2);//publish VO pose
-//        MapPub.PublishPose(EST_pose,3);
-//        pcl::transformPointCloud (*image_cloud, *image_cloud, EST_pose.matrix().cast <float> ());
-//        MapPub.PublishMap(image_cloud,3);
+        MapPub.PublishPose(EST_pose,3);
+        pcl::transformPointCloud (*image_cloud, *image_cloud, EST_pose.matrix().cast <float> ());
+        MapPub.PublishMap(image_cloud,3);
         
-        //prepare reference images
-        left_scaled.copyTo(ref_image);
-        igx_image.copyTo(ref_igx);
-        igy_image.copyTo(ref_igy);
 
         //save poses 
-//        write_poses("EST_poses.txt", EST_pose);
-        write_poses("GT_poses.txt", GT_pose);
-        write_poses("VO_poses.txt", VO_pose);
+        write_poses("EST_poses.txt", EST_pose);
+        write_poses("./GT_poses.txt", GT_pose);
+        write_poses("./VO_poses.txt", VO_pose);
         
         //broadcast
         Eigen::Affine3d e;
@@ -205,6 +172,7 @@ void CamLocalization::Refresh()
         Left_received = false;
         Right_received = false;
         Depth_received = false;
+        VO_received = false;
 
 
         end_time = timestamp_now ();
