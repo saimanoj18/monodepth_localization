@@ -132,7 +132,7 @@ void CamLocalization::Refresh()
             optimized_T = Matrix4d::Identity();
             optimized_T = Optimization(depth,depth_info,depth_gradientX,depth_gradientY,5.0);
             cout<<optimized_T<<endl;
-//            EST_pose = EST_pose*optimized_T.inverse();
+            EST_pose = EST_pose*optimized_T.inverse();
 
         }
         
