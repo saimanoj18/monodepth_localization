@@ -145,6 +145,7 @@ private:
     int width;
     int height;
     int ancient_width;
+    int ancient_height;
     double scale;
     float matching_thres;
     float d_var;

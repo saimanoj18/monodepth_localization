@@ -4,9 +4,9 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
 {
     //Set matrices
     float fx = P0(0,0)*512/ancient_width;
-    float fy = P0(1,1)*512/ancient_width;        
+    float fy = P0(1,1)*256/ancient_height;        
     float cx = P0(0,2)*512/ancient_width;
-    float cy = P0(1,2)*512/ancient_width;
+    float cy = P0(1,2)*256/ancient_height;
     base_line = -P1(0,3)/P0(0,0);// because R = I;
 
     cout<<"width: "<<ancient_width<<endl;
@@ -257,6 +257,7 @@ void CamLocalization::LeftImgCallback(const sensor_msgs::ImageConstPtr& msg, con
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::MONO8);
         left_image = cv_ptr->image;       
         ancient_width = left_image.cols;
+        ancient_height = left_image.rows;
         cv::resize(left_image, left_image, cv::Size(), scale, scale);
         Left_received = true; 
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
