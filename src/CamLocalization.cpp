@@ -45,9 +45,13 @@ void CamLocalization::Refresh()
         cTv.matrix() = e_temp.matrix();       
     }
 
-    if(frameID == 0) Depth_received = true;
+    if(frameID == 0) 
+    { 
+        Depth_received = true; 
+        Unc_received =true;
+    }
 
-    if(Velo_received ) //&& Depth_received && && Left_received && Right_received )
+    if(Velo_received && Depth_received && Unc_received) // && && Left_received && Right_received )
     {
           
         int u, v;//for loops
@@ -73,7 +77,7 @@ void CamLocalization::Refresh()
         }       
 
         //initialize 
-        if(frameID == 0)CamLocInitialize(left_image);            
+        if(frameID == 0)CamLocInitialize(disp);            
           
         frameID = frameID+1;
 
@@ -83,28 +87,34 @@ void CamLocalization::Refresh()
         image_cloud->is_dense = false;
         image_cloud->points.resize (image_cloud->width * image_cloud->height);
 
-//        if(frameID>1){            
+        if(frameID>1){            
 
-//            /////////////////////////depth image generation/////////////////////////////
-//            for(size_t i=0; i<width*height;i++)
-//            {
-//                u = i%width;
-//                v = i/width;
-//                depth[i] = disp.at<float>(v,u);        
-//            }
+            /////////////////////////depth image generation/////////////////////////////
+            for(size_t i=0; i<width*height;i++)
+            {
+                u = i%width;
+                v = i/width;
+                depth[i] = disp.at<float>(v,u);        
+            }
 
-//            /////////////////////////depth gradient generation/////////////////////////////
-//            cv::Scharr(disp, dgx_image, CV_32FC1, 1, 0);
-//            cv::Scharr(disp, dgy_image, CV_32FC1, 0, 1);
-//            int count_gradient = 0; 
-//            for(size_t i=0; i<width*height;i++)
-//            {
-//                u = i%width;
-//                v = i/width;
+            /////////////////////////depth gradient generation/////////////////////////////
+            cv::Scharr(disp, dgx_image, CV_32FC1, 1, 0);
+            cv::Scharr(disp, dgy_image, CV_32FC1, 0, 1);
+            int count_gradient = 0; 
+            for(size_t i=0; i<width*height;i++)
+            {
+                u = i%width;
+                v = i/width;
 
-//                //depth gradient
-//                depth_gradientX[i] = dgx_image.at<float>(v,u)/32.0f;
-//                depth_gradientY[i] = dgy_image.at<float>(v,u)/32.0f;
+                //depth gradient
+                depth_gradientX[i] = dgx_image.at<float>(v,u)/128.0f;
+                depth_gradientY[i] = dgy_image.at<float>(v,u)/128.0f;
+
+                //depth info
+                float info_denom = unc_image.at<float>(v,u);
+                depth_info[i] = 1000.0/info_denom;
+//                if (info_denom<0.01) depth_info[i] = 1000;
+//                else depth_info[i] = 10.0/info_denom;
 
 //                //depth info
 //                float info_denom = sqrt(depth_gradientX[i]*depth_gradientX[i]+depth_gradientY[i]*depth_gradientY[i]);
@@ -112,35 +122,35 @@ void CamLocalization::Refresh()
 //                else if (info_denom<0.01) depth_info[i] = 0;
 //                else depth_info[i] = 10.0/info_denom;
 
-//                //cloud plot
-//                if(isfinite(depth[i])){
-//                    image_cloud->points[i].x = depth[i]/K(0,0)*(u-K(0,2));
-//                    image_cloud->points[i].y = depth[i]/K(1,1)*(v-K(1,2)); 
-//                    image_cloud->points[i].z = depth[i];
-//                }   
-//            }
+                //cloud plot
+                if(isfinite(depth[i])){
+                    image_cloud->points[i].x = depth[i]/K(0,0)*(u-K(0,2));
+                    image_cloud->points[i].y = depth[i]/K(1,1)*(v-K(1,2)); 
+                    image_cloud->points[i].z = depth[i];
+                }   
+            }
 
-//            //prepare velo_raw
-//            EST_pose = EST_pose*update_pose;
-//            pcl::transformPointCloud (*velo_cloud, *velo_raw, GT_pose.matrix().cast <float> ());//transform to world coordinate
+            //prepare velo_raw
+            EST_pose = EST_pose*update_pose;
+            pcl::transformPointCloud (*velo_cloud, *velo_raw, GT_pose.matrix().cast <float> ());//transform to world coordinate
 
 
-//            //prepare velo_cloud
-//            pcl::transformPointCloud (*velo_raw, *velo_cloud, EST_pose.inverse().matrix().cast <float> ());
-//            
-//            //localization
-//            optimized_T = Matrix4d::Identity();
-//            optimized_T = Optimization(depth,depth_info,depth_gradientX,depth_gradientY,5.0);
-//            cout<<optimized_T<<endl;
-//            EST_pose = EST_pose*optimized_T.inverse();
+            //prepare velo_cloud
+            pcl::transformPointCloud (*velo_raw, *velo_cloud, EST_pose.inverse().matrix().cast <float> ());
+            
+            //localization
+            optimized_T = Matrix4d::Identity();
+            optimized_T = Optimization(depth,depth_info,depth_gradientX,depth_gradientY,5.0);
+            cout<<optimized_T<<endl;
+            EST_pose = EST_pose*optimized_T.inverse();
 
-//        }
+        }
         
         //publish map and pose
         MapPub.PublishMap(velo_raw,1);//publish velo raw
         MapPub.PublishPose(GT_pose,1);//publish GT pose
         MapPub.PublishPose(VO_pose,2);//publish VO pose
-//        MapPub.PublishPose(EST_pose,3);
+        MapPub.PublishPose(EST_pose,3);
         pcl::transformPointCloud (*image_cloud, *image_cloud, EST_pose.matrix().cast <float> ());
         MapPub.PublishMap(image_cloud,3);
         
@@ -160,6 +170,7 @@ void CamLocalization::Refresh()
         Left_received = false;
         Right_received = false;
         Depth_received = false;
+        Unc_received = false;
         VO_received = false;
 
 
@@ -300,7 +311,20 @@ void CamLocalization::DepthImgCallback(const sensor_msgs::Image::ConstPtr& msg)
         Depth_received = true;
           
     }
-}   
+}
+
+void CamLocalization::UncImgCallback(const sensor_msgs::Image::ConstPtr& msg)
+{
+    if(Unc_received==false)
+    {
+        //image processing
+        cv_bridge::CvImagePtr cv_ptr;
+        cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
+        unc_image = cv_ptr->image;       
+        Unc_received = true;
+          
+    }
+}    
 
 
 Matrix4d CamLocalization::visual_tracking(const float* ref, const float* r_igx, const float* r_igy, const float* i_var, const float* idepth, cv::Mat cur, Matrix4d init_pose, float thres)
@@ -356,7 +380,7 @@ Matrix4d CamLocalization::visual_tracking(const float* ref, const float* r_igx, 
         Vector2d Ipos( vSim3->cam_map(vSim3->estimate().map(pts)) );
         int i_idx = ((int)Ipos[1])*vSim3->_width+((int)Ipos[0]);
 
-        if ( pts[2]>0.0f && isfinite(pts[2]) && pts[2]<matching_thres){ //pts[2]<16*K(0,0)*base_line/100){ //pts[2]<30.0){//
+        if ( pts[2]>0.0f && isfinite(pts[2]) && pts[2]<matching_thres){//pts[2]<16*K(0,0)*base_line/100){ //pts[2]<30.0){//
             if (Ipos[0]<vSim3->_width && Ipos[0]>=0 && Ipos[1]<vSim3->_height && Ipos[1]>=0 && i_var[i_idx]>thres)
             {
                 // SET PointXYZ VERTEX
@@ -457,7 +481,7 @@ Matrix4d CamLocalization::Optimization(const float* idepth, const float* idepth_
         int i_idx = ((int)Ipos[1])*vSim3->_width+((int)Ipos[0]);
         
         
-        if ( pts[i][2]>0.0f && pts[i][2]<matching_thres){ //pts[i][2]<16*K(0,0)*base_line/100){//pts[i][2]<30.0){//
+        if ( pts[i][2]>0.0f && pts[i][2]<matching_thres ){//pts[i][2]<16*K(0,0)*base_line/100){//pts[i][2]<30.0){//
                 if (Ipos[0]<vSim3->_width && Ipos[0]>=0 && Ipos[1]<vSim3->_height && Ipos[1]>=0 && idepth_var[i_idx]>thres)
                 {
                     // SET PointXYZ VERTEX
@@ -617,5 +641,4 @@ void CamLocalization::debugImage(cv::Mat& depth_image,cv::Mat& dgx_image,cv::Mat
     save_colormap(info, "information.jpg",0,100);
    
 }
-
 

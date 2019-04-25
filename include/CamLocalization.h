@@ -62,7 +62,7 @@ public:
     CamLocalization():
     velo_raw(new pcl::PointCloud<pcl::PointXYZ>),velo_cloud(new pcl::PointCloud<pcl::PointXYZ>),velo_xyzi(new pcl::PointCloud<pcl::PointXYZI>),velo_global(new pcl::PointCloud<pcl::PointXYZ>),
     fakeTimeStamp(0),frameID(0), scale(1),
-    Velo_received(false),Left_received(false),Right_received(false), Depth_received(false),VO_received(false),
+    Velo_received(false),Left_received(false),Right_received(false), Depth_received(false), Unc_received(false), VO_received(false),
     octree(128.0f)
     {
         it = new image_transport::ImageTransport(nh);
@@ -71,7 +71,8 @@ public:
         sub_veloptcloud = nh.subscribe("/kitti/velodyne_points", 1, &CamLocalization::VeloPtsCallback, this);
         sub_leftimg = it->subscribeCamera("/kitti/left_image", 10,&CamLocalization::LeftImgCallback, this);
         sub_rightimg = it->subscribeCamera("/kitti/right_image", 10,&CamLocalization::RightImgCallback, this);
-        sub_monodepth = nh.subscribe("/undeepvo/image", 1, &CamLocalization::DepthImgCallback, this);         
+        sub_monodepth = nh.subscribe("/undeepvo/image", 1, &CamLocalization::DepthImgCallback, this);
+        sub_uncdepth = nh.subscribe("/undeepvo/unc_image", 1, &CamLocalization::UncImgCallback, this);           
 
         EST_pose = Matrix4d::Identity();
         IN_pose = Matrix4d::Identity();
@@ -104,6 +105,7 @@ private:
     image_transport::CameraSubscriber sub_leftimg;
     image_transport::CameraSubscriber sub_rightimg;
     ros::Subscriber sub_monodepth;
+    ros::Subscriber sub_uncdepth;
 //    ros::Subscriber sub_caminfo;
     tf::TransformListener tlistener;
 
@@ -126,6 +128,7 @@ private:
     int frameID;
     cv::Mat dgx_image, dgy_image; 
     cv::Mat disp;
+    cv::Mat unc_image;
     float* depth;
     float* depth_gradientX;// = new float[width*height]();
     float* depth_gradientY;// = new float[width*height]();
@@ -167,11 +170,13 @@ private:
     void LeftImgCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr & infomsg);
     void RightImgCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr & infomsg);
     void DepthImgCallback(const sensor_msgs::Image::ConstPtr& msg);
+    void UncImgCallback(const sensor_msgs::Image::ConstPtr& msg);
     void CamInfoCallback(const sensor_msgs::CameraInfo::ConstPtr& msg);
     bool Velo_received; 
     bool Left_received; 
     bool Right_received;
     bool Depth_received;
+    bool Unc_received;
     bool VO_received;
     void read_poses(std::string fname); 
     void write_poses(std::string fname, Matrix4d saved_pose); 
