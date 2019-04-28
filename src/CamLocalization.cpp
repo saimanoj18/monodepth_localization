@@ -99,7 +99,7 @@ void CamLocalization::Refresh()
 
             /////////////////////////depth gradient generation/////////////////////////////
             cv::Scharr(disp, dgx_image, CV_32FC1, 1, 0);
-            cv::Scharr(disp, dgy_image, CV_32FC1, 0, 1);
+            cv::Scharr(disp, dgy_image, CV_32FC1, 0, 1);  
             int count_gradient = 0; 
             for(size_t i=0; i<width*height;i++)
             {
@@ -107,20 +107,14 @@ void CamLocalization::Refresh()
                 v = i/width;
 
                 //depth gradient
-                depth_gradientX[i] = dgx_image.at<float>(v,u)/128.0f;
-                depth_gradientY[i] = dgy_image.at<float>(v,u)/128.0f;
+                depth_gradientX[i] = dgx_image.at<float>(v,u)/100.0f;
+                depth_gradientY[i] = dgy_image.at<float>(v,u)/100.0f;
 
                 //depth info
                 float info_denom = unc_image.at<float>(v,u);
                 depth_info[i] = 1000.0/info_denom;
-//                if (info_denom<0.01) depth_info[i] = 1000;
-//                else depth_info[i] = 10.0/info_denom;
-
-//                //depth info
-//                float info_denom = sqrt(depth_gradientX[i]*depth_gradientX[i]+depth_gradientY[i]*depth_gradientY[i]);
-//                if (!isfinite(info_denom)) depth_info[i] = 0;
-//                else if (info_denom<0.01) depth_info[i] = 0;
-//                else depth_info[i] = 10.0/info_denom;
+//                if (depth_info[i]<1.0) depth_info[i] = 1000.0;
+//                else depth_info[i] = 1000.0/info_denom;
 
                 //cloud plot
                 if(isfinite(depth[i])){
@@ -140,7 +134,7 @@ void CamLocalization::Refresh()
             
             //localization
             optimized_T = Matrix4d::Identity();
-            optimized_T = Optimization(depth,depth_info,depth_gradientX,depth_gradientY,5.0);
+            optimized_T = Optimization(depth,depth_info,depth_gradientX,depth_gradientY,10.0);
             cout<<optimized_T<<endl;
             EST_pose = EST_pose*optimized_T.inverse();
 
@@ -481,8 +475,8 @@ Matrix4d CamLocalization::Optimization(const float* idepth, const float* idepth_
         int i_idx = ((int)Ipos[1])*vSim3->_width+((int)Ipos[0]);
         
         
-        if ( pts[i][2]>0.0f && pts[i][2]<matching_thres ){//pts[i][2]<16*K(0,0)*base_line/100){//pts[i][2]<30.0){//
-                if (Ipos[0]<vSim3->_width && Ipos[0]>=0 && Ipos[1]<vSim3->_height && Ipos[1]>=0 && idepth_var[i_idx]>thres)
+        if ( pts[i][2]>0.0f){// && pts[i][2]<matching_thres //pts[i][2]<16*K(0,0)*base_line/100){//pts[i][2]<30.0){//
+                if (Ipos[0]<vSim3->_width && Ipos[0]>=0 && Ipos[1]<vSim3->_height && Ipos[1]>=0 && idepth_var[i_idx]>thres) //
                 {
                     // SET PointXYZ VERTEX
 //                    pts[i][2] = 11.0f;

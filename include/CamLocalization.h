@@ -88,6 +88,10 @@ public:
 
     }
     ~CamLocalization(){
+
+        delete [] ref_container;
+        delete [] igx_container;
+        delete [] igy_container;
     
     }
     void CamLocInitialize(cv::Mat image);
@@ -124,6 +128,10 @@ private:
     pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree;
     cv::Mat left_image;
     cv::Mat right_image;
+    cv::Mat ref_image;
+    float* ref_container;
+    float* igx_container;
+    float* igy_container;
     double fakeTimeStamp;
     int frameID;
     cv::Mat dgx_image, dgy_image; 
@@ -133,6 +141,7 @@ private:
     float* depth_gradientX;// = new float[width*height]();
     float* depth_gradientY;// = new float[width*height]();
     float* depth_info;// = new float[width*height]();
+    float* image_info;// = new float[width*height]();
 
     //input transform    
     tf::StampedTransform ctv;
