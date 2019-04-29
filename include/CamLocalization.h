@@ -40,6 +40,7 @@
 #include <cv_bridge/cv_bridge.h> 
 #include <opencv2/calib3d.hpp>
 
+
 #include "Thirdparty/g2o/g2o/core/block_solver.h"
 #include "Thirdparty/g2o/g2o/core/optimization_algorithm_levenberg.h"
 #include "Thirdparty/g2o/g2o/solvers/linear_solver_eigen.h"
@@ -47,6 +48,7 @@
 #include "Thirdparty/g2o/g2o/core/robust_kernel_impl.h"
 #include "Thirdparty/g2o/g2o/solvers/linear_solver_dense.h"
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
+//#include "ceres/ceres.h"
 
 #include <liblas/liblas.hpp>
 #include <liblas/reader.hpp>
@@ -88,10 +90,6 @@ public:
 
     }
     ~CamLocalization(){
-
-        delete [] ref_container;
-        delete [] igx_container;
-        delete [] igy_container;
     
     }
     void CamLocInitialize(cv::Mat image);
@@ -128,10 +126,6 @@ private:
     pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree;
     cv::Mat left_image;
     cv::Mat right_image;
-    cv::Mat ref_image;
-    float* ref_container;
-    float* igx_container;
-    float* igy_container;
     double fakeTimeStamp;
     int frameID;
     cv::Mat dgx_image, dgy_image; 
