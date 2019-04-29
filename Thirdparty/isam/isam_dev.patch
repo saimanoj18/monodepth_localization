@@ -1,0 +1,90 @@
+diff -rupN isam_dev/include/isam/Pose2d.h isam_dev2/include/isam/Pose2d.h
+--- isam_dev/include/isam/Pose2d.h	2013-09-10 20:04:37.000000000 +0900
++++ isam_dev2/include/isam/Pose2d.h	2016-10-23 18:17:38.498597284 +0900
+@@ -54,9 +54,8 @@ public:
+ 
+   Pose2d exmap(const Eigen::Vector3d& delta) const {
+     Pose2d res = *this;
+-    res._x += delta(0);
+-    res._y += delta(1);
+-    res._t = standardRad(res._t + delta(2));
++    Pose2d delta_pose(delta);
++    res=res.oplus(delta_pose);
+     return res;
+   }
+ 
+diff -rupN isam_dev/include/isam/Pose3d.h isam_dev2/include/isam/Pose3d.h
+--- isam_dev/include/isam/Pose3d.h	2013-09-10 20:04:37.000000000 +0900
++++ isam_dev2/include/isam/Pose3d.h	2016-10-23 18:18:15.606596514 +0900
+@@ -112,8 +112,8 @@ public:
+ 
+   Pose3d exmap(const Vector6d& delta) const {
+     Pose3d res = *this;
+-    res._t   = res._t.exmap(delta.head(3));
+-    res._rot = res._rot.exmap(delta.tail(3));
++    Pose3d delta_pose(delta);
++    res=res.oplus(delta_pose);
+     return res;
+   }
+ 
+diff -rupN isam_dev/include/isam/slam2d.h isam_dev2/include/isam/slam2d.h
+--- isam_dev/include/isam/slam2d.h	2013-09-10 20:04:37.000000000 +0900
++++ isam_dev2/include/isam/slam2d.h	2016-10-23 18:20:14.970594037 +0900
+@@ -143,7 +143,9 @@ public:
+   }
+ 
+   Eigen::VectorXd basic_error(Selector s = LINPOINT) const {
+-    Eigen::VectorXd err = _pose->vector(s) - _measure.vector();
++    Pose2d predicted(_pose->vector(s));
++    Pose2d err_pose = _measure.ominus(predicted);
++    Eigen::VectorXd err = err_pose.vector();
+     err(2) = standardRad(err(2));
+     return err;
+   }
+@@ -277,7 +279,8 @@ public:
+     } else {
+       predicted = p2.ominus(p1);
+     }
+-    Eigen::VectorXd err = predicted.vector() - _measure.vector();
++    Pose2d err_pose = _measure.ominus(predicted);
++    Eigen::VectorXd err = err_pose.vector();
+     err(2) = standardRad(err(2));
+     return err;
+   }
+diff -rupN isam_dev/include/isam/slam3d.h isam_dev2/include/isam/slam3d.h
+--- isam_dev/include/isam/slam3d.h	2013-09-10 20:04:37.000000000 +0900
++++ isam_dev2/include/isam/slam3d.h	2016-10-23 18:26:03.938586795 +0900
+@@ -68,7 +68,9 @@ public:
+   }
+ 
+   Eigen::VectorXd basic_error(Selector s = ESTIMATE) const {
+-    Eigen::VectorXd err = _nodes[0]->vector(s) - _measure.vector();
++    Pose3d predicted(_nodes[0]->vector(s));
++    Pose3d err_pose = _measure.ominus(predicted); 
++    Eigen::VectorXd err = err_pose.vector();    
+     err(3) = standardRad(err(3));
+     err(4) = standardRad(err(4));
+     err(5) = standardRad(err(5));
+@@ -171,7 +173,8 @@ public:
+     } else {
+       predicted = p2.ominus(p1);
+     }
+-    Eigen::VectorXd err = predicted.vector() - _measure.vector();
++    Pose3d err_pose = _measure.ominus(predicted);
++    Eigen::VectorXd err = err_pose.vector();
+     err(3) = standardRad(err(3));
+     err(4) = standardRad(err(4));
+     err(5) = standardRad(err(5));
+
+diff -rupN isam_dev/include/isam/Properties.h isam_dev2/include/isam/Properties.h
+--- isam_dev/include/isam/Properties.h	2017-07-15 13:06:59.928318006 +0900
++++ isam_dev2/include/isam/Properties_new.h	2017-07-15 13:07:28.033196745 +0900
+@@ -87,7 +87,7 @@
+     lm_lambda_factor(10.),
+ 
+     mod_update(1),
+-    mod_batch(100),
++    mod_batch(10000000),
+     mod_solve(1)
+   {}
+ };
