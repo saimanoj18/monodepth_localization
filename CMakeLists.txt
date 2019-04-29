@@ -22,6 +22,7 @@ pcl_msgs
 pcl_ros
 tf
 tf_conversions
+eigen_conversions
 irp_slam_msgs
 irp_sen_msgs
 lib_irp_common
@@ -46,7 +47,7 @@ catkin_package(DEPENDS OpenCV Eigen3 libLAS isam
                lib_irp_common
                lib_irp_math
                cv_bridge
-               pcl_ros pcl_conversions pcl_msgs tf tf_conversions)
+               pcl_ros pcl_conversions pcl_msgs tf tf_conversions eigen_conversions)
 
 # Also add some useful compiler flag
 set(CMAKE_CXX_FLAGS

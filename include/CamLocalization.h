@@ -13,11 +13,13 @@
 
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/Image.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf/transform_listener.h>
 #include <tf_conversions/tf_eigen.h>
+#include <eigen_conversions/eigen_msg.h>
 
 
 #include <pcl_conversions/pcl_conversions.h>
@@ -82,7 +84,8 @@ public:
         sub_leftimg = it->subscribeCamera("/kitti/left_image", 10,&CamLocalization::LeftImgCallback, this);
         sub_rightimg = it->subscribeCamera("/kitti/right_image", 10,&CamLocalization::RightImgCallback, this);
         sub_monodepth = nh.subscribe("/undeepvo/image", 1, &CamLocalization::DepthImgCallback, this);
-        sub_uncdepth = nh.subscribe("/undeepvo/unc_image", 1, &CamLocalization::UncImgCallback, this);           
+        sub_uncdepth = nh.subscribe("/undeepvo/unc_image", 1, &CamLocalization::UncImgCallback, this);   
+        sub_posecov = nh.subscribe("/undeepvo/posecov", 1, &CamLocalization::PoseCovCallback, this);          
 
         EST_pose = Matrix4d::Identity();
         IN_pose = Matrix4d::Identity();
@@ -106,7 +109,11 @@ public:
     
 private:
 
-
+    //isam (pose graph optimization)
+    isamClient isamclient;
+    void add_odometry(Matrix4d rel_pose, MatrixXd uncertainty);
+    void add_observation(Matrix4d prior_pose, MatrixXd uncertainty);
+    Matrix4d fix_poses();    
 
     //for ros subscription
     ros::NodeHandle nh;
@@ -116,6 +123,7 @@ private:
     image_transport::CameraSubscriber sub_rightimg;
     ros::Subscriber sub_monodepth;
     ros::Subscriber sub_uncdepth;
+    ros::Subscriber sub_posecov;
 //    ros::Subscriber sub_caminfo;
     tf::TransformListener tlistener;
 
@@ -182,6 +190,7 @@ private:
     void RightImgCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr & infomsg);
     void DepthImgCallback(const sensor_msgs::Image::ConstPtr& msg);
     void UncImgCallback(const sensor_msgs::Image::ConstPtr& msg);
+    void PoseCovCallback(const geometry_msgs::PoseWithCovarianceStamped& msg);
     void CamInfoCallback(const sensor_msgs::CameraInfo::ConstPtr& msg);
     bool Velo_received; 
     bool Left_received; 

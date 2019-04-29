@@ -31,6 +31,8 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
     d_limit = 0.0;
     matching_thres = K(0,0)*base_line*( 1.0/(d_limit/16.0) + d_var/((float)(d_limit/16.0)*(d_limit/16.0)*(d_limit/16.0)) );
 
+    //initialize 
+    add_observation(Matrix4d::Identity(), Matrix<double,6,6>::Identity()*0.001);        
 
 }
 
@@ -78,8 +80,6 @@ void CamLocalization::Refresh()
 
         //initialize 
         if(frameID == 0)CamLocInitialize(disp);            
-          
-        frameID = frameID+1;
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr image_cloud (new pcl::PointCloud<pcl::PointXYZ>);
         image_cloud->width    = width;
@@ -87,7 +87,7 @@ void CamLocalization::Refresh()
         image_cloud->is_dense = false;
         image_cloud->points.resize (image_cloud->width * image_cloud->height);
 
-        if(frameID>1){            
+        if(frameID>0){           
 
             /////////////////////////depth image generation/////////////////////////////
             for(size_t i=0; i<width*height;i++)
@@ -112,7 +112,7 @@ void CamLocalization::Refresh()
 
                 //depth info
                 float info_denom = unc_image.at<float>(v,u);
-                depth_info[i] = 1000.0/info_denom;
+                depth_info[i] = 1000.0/exp(info_denom);
 //                if (depth_info[i]<1.0) depth_info[i] = 1000.0;
 //                else depth_info[i] = 1000.0/info_denom;
 
@@ -134,10 +134,16 @@ void CamLocalization::Refresh()
             
             //localization
             optimized_T = Matrix4d::Identity();
-            optimized_T = Optimization(depth,depth_info,depth_gradientX,depth_gradientY,10.0);
+            optimized_T = Optimization(depth,depth_info,depth_gradientX,depth_gradientY,1.0);
             cout<<optimized_T<<endl;
             EST_pose = EST_pose*optimized_T.inverse();
 
+            /////////////////////////isam pose graph optimization.//////////////////////////
+            add_odometry(update_pose, Matrix<double,6,6>::Identity()*0.001); 
+            add_observation(EST_pose, Matrix<double,6,6>::Identity()*0.01);//if(frameID==1)
+            EST_pose = fix_poses();        
+            
+            frameID = frameID+1;
         }
         
         //publish map and pose
@@ -166,12 +172,14 @@ void CamLocalization::Refresh()
         Depth_received = false;
         Unc_received = false;
         VO_received = false;
+        if(frameID == 0)frameID = frameID+1;
 
 
         end_time = timestamp_now ();
         float time_diff = (end_time - start_time)/1000000.0;
         write_times("Elapsed_times.txt", time_diff);
         cout<<"Elapsed time: %"<<time_diff<<" secs\n"<<endl;
+
     }    
 
 
@@ -320,6 +328,94 @@ void CamLocalization::UncImgCallback(const sensor_msgs::Image::ConstPtr& msg)
     }
 }    
 
+void CamLocalization::PoseCovCallback(const geometry_msgs::PoseWithCovarianceStamped& msg)
+{
+
+    Eigen::Affine3d e_temp;
+    tf::poseMsgToEigen(msg.pose.pose, e_temp);
+    VO_pose.matrix() = e_temp.matrix();  
+}
+void CamLocalization::add_odometry(Matrix4d rel_pose, MatrixXd uncertainty)
+{
+    //create x, y z, roll, pitch yaw
+    Vector3d eular = rel_pose.block<3,3>(0,0).eulerAngles(2,1,0);
+
+    //create pose_pose factor
+    irp_slam_msgs::f_pose_pose f_pose_pose;
+    f_pose_pose.utime = frameID-1;
+    f_pose_pose.node_id1 = frameID-1;
+    f_pose_pose.node_id2  = frameID;
+    f_pose_pose.sub_type = irp_slam_msgs::f_pose_pose::SUB_TYPE_ODOMETRY_3D;
+    f_pose_pose.use_dcs = false;
+    f_pose_pose.n = 6;
+    f_pose_pose.n2 = 36;
+    f_pose_pose.z.resize(f_pose_pose.n);
+    f_pose_pose.R.resize(f_pose_pose.n2);
+    f_pose_pose.z[0] = rel_pose(0,3);
+    f_pose_pose.z[1] = rel_pose(1,3);
+    f_pose_pose.z[2] = rel_pose(2,3);
+    f_pose_pose.z[3] = eular(2);
+    f_pose_pose.z[4] = eular(1);
+    f_pose_pose.z[5] = eular(0);
+    for(int i = 0; i < 36 ; i ++)f_pose_pose.R[i] = uncertainty(i);
+//    {
+//        if((i+1)%5==0) f_pose_pose.R[i] = 1.0;
+//        else f_pose_pose.R[i] = 0;
+//    }
+
+    isamclient.isamAddPosePose(f_pose_pose);    
+}
+
+void CamLocalization::add_observation(Matrix4d prior_pose, MatrixXd uncertainty)
+{
+    //create x, y z, roll, pitch yaw
+    Vector3d eular = prior_pose.block<3,3>(0,0).eulerAngles(2,1,0);
+
+    //create prior factor
+    irp_slam_msgs::f_pose_partial f_prior;
+    f_prior.utime = frameID;
+    f_prior.node_id = f_prior.utime;
+    f_prior.sub_type = irp_slam_msgs::f_pose_partial::SUB_TYPE_FULL_STATE_P3D;
+    f_prior.use_anchor = 0;
+    f_prior.use_dcs = false;
+    f_prior.n = 6;
+    f_prior.n2 = 36;
+    f_prior.z.resize(f_prior.n);
+    f_prior.R.resize(f_prior.n2);
+    f_prior.z[0] = prior_pose(0,3);
+    f_prior.z[1] = prior_pose(1,3);
+    f_prior.z[2] = prior_pose(2,3);
+    f_prior.z[3] = eular(2);
+    f_prior.z[4] = eular(1);
+    f_prior.z[5] = eular(0);
+    for(int i = 0; i < 36 ; i ++) f_prior.R[i] = uncertainty(i);
+
+    isamclient.isamAddPosePartial(f_prior);
+}
+
+Matrix4d CamLocalization::fix_poses()
+{
+
+//    isamclient.RunBatchOptimization();
+    irp_slam_msgs::graph_vis graph_vis_data = isamclient.GetGraphVis();
+    cout<<graph_vis_data.nn<<endl;
+    double fixed_pose[6];
+    for(int i = 0; i < 6 ; i ++)fixed_pose[i] = graph_vis_data.mu[6*(graph_vis_data.nn-1)+i];
+
+    Eigen::AngleAxisd rollAngle(fixed_pose[3], Eigen::Vector3d::UnitZ());
+    Eigen::AngleAxisd yawAngle(fixed_pose[4], Eigen::Vector3d::UnitY());
+    Eigen::AngleAxisd pitchAngle(fixed_pose[5], Eigen::Vector3d::UnitX());
+    Eigen::Quaternion<double> q = rollAngle * yawAngle * pitchAngle;
+    Eigen::Matrix3d rotationMatrix = q.matrix();
+    Matrix4d Fixed_Pose = Matrix4d::Identity();
+    Fixed_Pose.block<3,3>(0,0) = rotationMatrix;
+    Fixed_Pose(0,3) = fixed_pose[0];
+    Fixed_Pose(1,3) = fixed_pose[1];
+    Fixed_Pose(2,3) = fixed_pose[2];
+    
+    return Fixed_Pose;    
+
+} 
 
 Matrix4d CamLocalization::visual_tracking(const float* ref, const float* r_igx, const float* r_igy, const float* i_var, const float* idepth, cv::Mat cur, Matrix4d init_pose, float thres)
 {
