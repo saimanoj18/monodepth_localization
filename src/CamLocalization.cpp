@@ -24,6 +24,7 @@ void CamLocalization::CamLocInitialize(cv::Mat image)
     depth_gradientX = new float[width*height]();
     depth_gradientY = new float[width*height]();
     depth_info = new float[width*height]();
+    VO_covariance = new float[36]();
 
     //set initial pose
     EST_pose = GT_pose;   
@@ -69,14 +70,14 @@ void CamLocalization::Refresh()
             tf::transformTFToEigen(wtb, e_temp);
             GT_pose.matrix() = e_temp.matrix();  
         }
-        success_pose = tlistener.waitForTransform("/undeepvo/World", "/undeepvo/Current", ros::Time(0), ros::Duration(0.1));
-        if (success_pose) {
-            tlistener.lookupTransform("/undeepvo/World", "/undeepvo/Current", ros::Time(0), wtb);
-            Eigen::Affine3d e_temp;
-            tf::transformTFToEigen(wtb, e_temp);
-            update_pose.matrix() = e_temp.matrix();
-            VO_pose = VO_pose*update_pose;
-        }       
+//        success_pose = tlistener.waitForTransform("/undeepvo/World", "/undeepvo/Current", ros::Time(0), ros::Duration(0.1));
+//        if (success_pose) {
+//            tlistener.lookupTransform("/undeepvo/World", "/undeepvo/Current", ros::Time(0), wtb);
+//            Eigen::Affine3d e_temp;
+//            tf::transformTFToEigen(wtb, e_temp);
+//            update_pose.matrix() = e_temp.matrix();
+//            VO_pose = VO_pose*update_pose;
+//        }       
 
         //initialize 
         if(frameID == 0)CamLocInitialize(disp);            
@@ -139,8 +140,8 @@ void CamLocalization::Refresh()
             EST_pose = EST_pose*optimized_T.inverse();
 
             /////////////////////////isam pose graph optimization.//////////////////////////
-            add_odometry(update_pose, Matrix<double,6,6>::Identity()*0.001); 
-            add_observation(EST_pose, Matrix<double,6,6>::Identity()*0.01);//if(frameID==1)
+            add_odometry(update_pose, VO_covariance); 
+            add_observation(EST_pose, Matrix<double,6,6>::Identity()*0.001);//if(frameID==1)
             EST_pose = fix_poses();        
             
             frameID = frameID+1;
@@ -330,12 +331,17 @@ void CamLocalization::UncImgCallback(const sensor_msgs::Image::ConstPtr& msg)
 
 void CamLocalization::PoseCovCallback(const geometry_msgs::PoseWithCovarianceStamped& msg)
 {
-
-    Eigen::Affine3d e_temp;
-    tf::poseMsgToEigen(msg.pose.pose, e_temp);
-    VO_pose.matrix() = e_temp.matrix();  
+    if(VO_received==false)
+    {
+        Eigen::Affine3d e_temp;
+        tf::poseMsgToEigen(msg.pose.pose, e_temp);
+        update_pose.matrix() = e_temp.matrix();
+        VO_pose = VO_pose*update_pose;
+        for(int i = 0; i < 36 ; i ++)VO_covariance[i] = msg.pose.covariance[i];
+        VO_received = true;
+    }  
 }
-void CamLocalization::add_odometry(Matrix4d rel_pose, MatrixXd uncertainty)
+void CamLocalization::add_odometry(Matrix4d rel_pose, float* uncertainty)
 {
     //create x, y z, roll, pitch yaw
     Vector3d eular = rel_pose.block<3,3>(0,0).eulerAngles(2,1,0);
@@ -357,7 +363,7 @@ void CamLocalization::add_odometry(Matrix4d rel_pose, MatrixXd uncertainty)
     f_pose_pose.z[3] = eular(2);
     f_pose_pose.z[4] = eular(1);
     f_pose_pose.z[5] = eular(0);
-    for(int i = 0; i < 36 ; i ++)f_pose_pose.R[i] = uncertainty(i);
+    for(int i = 0; i < 36 ; i ++)f_pose_pose.R[i] = uncertainty[i];
 //    {
 //        if((i+1)%5==0) f_pose_pose.R[i] = 1.0;
 //        else f_pose_pose.R[i] = 0;

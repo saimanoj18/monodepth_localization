@@ -111,9 +111,10 @@ private:
 
     //isam (pose graph optimization)
     isamClient isamclient;
-    void add_odometry(Matrix4d rel_pose, MatrixXd uncertainty);
+    void add_odometry(Matrix4d rel_pose, float* uncertainty);
     void add_observation(Matrix4d prior_pose, MatrixXd uncertainty);
-    Matrix4d fix_poses();    
+    Matrix4d fix_poses(); 
+    float* VO_covariance;   
 
     //for ros subscription
     ros::NodeHandle nh;
