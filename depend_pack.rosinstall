@@ -1,0 +1,21 @@
+- git:
+   local-name: irp_sen_msgs
+   uri: https://github.com/irapkaist/irp_sen_msgs.git
+
+- git:
+   local-name: irp_library
+   uri: https://github.com/irapkaist/irp_library.git
+
+- git:
+   local-name: irp_slam_msgs
+   uri: https://github.com/irapkaist/irp_slam_msgs.git
+
+- git:
+   local-name: rosbag_player
+   uri: https://github.com/irapkaist/rosbag_player.git
+
+
+- git:
+   local-name: file_player
+   uri: https://github.com/irapkaist/file_player.git
+

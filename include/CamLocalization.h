@@ -50,6 +50,14 @@
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
 //#include "ceres/ceres.h"
 
+#include "isamClient.h"
+//#include <isam/isam.h>
+//#include "lib_irp_common/error.h"
+//#include "irp_slam_msgs/f_pose_partial.h"
+//#include "irp_slam_msgs/f_pose_pose.h"
+//#include "irp_slam_msgs/graph_vis.h"
+//#include "irp_slam_msgs/node.h"
+
 #include <liblas/liblas.hpp>
 #include <liblas/reader.hpp>
 
